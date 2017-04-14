@@ -108,7 +108,7 @@ def format_to_json(input_data):
     return json_payload
 
 
-def get_FDN(obj_id, connection, frame="object", url_addon=None):
+def get_FDN(obj_id, connection, frame="raw", url_addon=None):
     '''GET an FDN object, collection or search result as JSON and
         return as dict or list of dicts for objects, and collection
         or search, respectively.
@@ -124,6 +124,9 @@ def get_FDN(obj_id, connection, frame="object", url_addon=None):
             logging.warning('%s' % (response.json().get("notification")))
         except:
             logging.warning('%s' % (response.text))
+    # if response.status_code == 500:
+    #     url = FDN_url(obj_id, connection, "raw")
+    #     response = requests.get(url, auth=connection.auth, headers=connection.headers)
     if url_addon and response.json().get('@graph'):  # pragma: no cover
         return response.json()['@graph']
     return response.json()

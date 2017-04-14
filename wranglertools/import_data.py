@@ -320,6 +320,7 @@ def get_existing(post_json, connection):
             temp = fdnDCIC.get_FDN(post_json[identifier], connection)
             if temp.get("uuid"):
                 uuids.append(temp.get("uuid"))
+
     # also look for all aliases
     if post_json.get("aliases"):
         # weird precaution in case there are 2 aliases, 1 exisitng , 1 new
@@ -328,7 +329,7 @@ def get_existing(post_json, connection):
             temp = fdnDCIC.get_FDN(an_alias, connection)
             if temp.get("uuid"):
                 uuids.append(temp.get("uuid"))
-
+    return temp
     # check if all existing identifiers point to the same object
     unique_uuids = list(set(uuids))
     # if no existing information
@@ -403,7 +404,7 @@ def populate_post_json(post_json, connection, sheet):
         # remove full path from filename
         just_filename = filename_to_post.split('/')[-1]
         # if new file
-        if not existing_data.get('uuid'):
+        if not existing_data.get('accession'):
             post_json['filename'] = just_filename
             file_to_upload = True
         # if there is an existing file metadata, the status should be uploading to upload a new one
@@ -568,7 +569,7 @@ def patch_item(file_to_upload, post_json, filename_to_post, existing_data, conne
         print("calculating md5 sum for file %s " % (filename_to_post))
         post_json['md5sum'] = md5(filename_to_post)
 
-    e = fdnDCIC.patch_FDN(existing_data["uuid"], connection, post_json)
+    e = fdnDCIC.patch_FDN(existing_data["accession"], connection, post_json)
     if file_to_upload:
         # get s3 credentials
         creds = get_upload_creds(e['@graph'][0]['accession'], connection, e['@graph'][0])
@@ -615,12 +616,12 @@ def ftp_copy(filename_to_post, post_json):
 
 def delete_fields(post_json, connection, existing_data):
     """Does a put to delete fields with the keyword '*delete*'."""
-    my_uuid = existing_data.get("uuid")
+    my_alias = existing_data.get("aliases")[0]
     my_accesssion = existing_data.get("accession")
-    raw_json = fdnDCIC.get_FDN(my_uuid, connection, frame="raw")
+    raw_json = fdnDCIC.get_FDN(my_alias, connection, frame="raw")
     # check if the uuid is in the raw_json
-    if not raw_json.get("uuid"):
-        raw_json["uuid"] = my_uuid
+    # if not raw_json.get("uuid"):
+    #     raw_json["accession"] = my_uuid
     # if there is an accession, add it to raw so it does not created again
     if my_accesssion:
         if not raw_json.get("accession"):
@@ -705,7 +706,7 @@ def excel_reader(datafile, sheet, update, connection, patchall, all_aliases,
         # Run update or patchall
         e = {}
         # if there is an existing item, try patching
-        if existing_data.get("uuid"):
+        if existing_data.get("accession"):
             if patchall:
                 # First check for fields to be deleted, and do put
                 post_json = delete_fields(post_json, connection, existing_data)
@@ -734,7 +735,7 @@ def excel_reader(datafile, sheet, update, connection, patchall, all_aliases,
                 print(e)
                 error += 1
         elif e.get("status") == "success":
-            if existing_data.get("uuid"):
+            if existing_data.get("accession"):
                 patch += 1
             else:
                 post += 1
@@ -742,9 +743,9 @@ def excel_reader(datafile, sheet, update, connection, patchall, all_aliases,
         # dryrun option
         if not patchall and not update:
             # simulate patch/post
-            if existing_data.get("uuid"):
+            if existing_data.get("accession"):
                 post_json = remove_deleted(post_json)
-                e = fdnDCIC.patch_FDN_check(existing_data["uuid"], connection, post_json)
+                e = fdnDCIC.patch_FDN_check(existing_data["accession"], connection, post_json)
             else:
                 post_json = remove_deleted(post_json)
                 e = fdnDCIC.new_FDN_check(connection, sheet, post_json)
@@ -761,11 +762,11 @@ def excel_reader(datafile, sheet, update, connection, patchall, all_aliases,
         # check status and if success fill transient storage dictionaries
         if e.get("status") == "success":
             # uuid of the posted/patched item
-            item_uuid = e['@graph'][0]['uuid']
+            item_uuid = e['@graph'][0]['aliases']
             item_id = e['@graph'][0]['@id']
             # if post/patch successful, append uuid to patch_loadxl_item if full
             if patch_loadxl_item != {}:
-                patch_loadxl_item['uuid'] = item_uuid
+                patch_loadxl_item['aliases'] = item_uuid
                 patch_loadxl.append(patch_loadxl_item)
             # if post/patch successful, add the replicate/set information to the accumulate lists
             if sheet.startswith('Experiment') and not sheet.startswith('ExperimentSet'):
@@ -864,7 +865,7 @@ def loadxl_cycle(patch_list, connection):
         for entry in patch_list[n]:
             if entry != {}:
                 total = total + 1
-                fdnDCIC.patch_FDN(entry["uuid"], connection, entry)
+                fdnDCIC.patch_FDN(entry["accession"], connection, entry)
         print("{sheet}(phase2): {total} items patched.".format(sheet=n.upper(), total=total))
 
 
